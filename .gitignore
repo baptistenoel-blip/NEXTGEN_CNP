@@ -1,0 +1,27 @@
+# Environnements virtuels (ne jamais pusher les packages)
+venv/
+.venv/
+env/
+ENV/
+
+# Caches Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Fichiers de configuration & secrets Streamlit
+.streamlit/secrets.toml
+
+# Fichiers d'environnement & clés d'API
+.env
+.env.*
+
+# Fichiers système & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Fichiers de logs & temporaires
+*.log
+.pytest_cache/

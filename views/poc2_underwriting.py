@@ -794,6 +794,22 @@ def _render_styles():
             margin-top: 6px;
         }
 
+        .poc2-sim-side {
+            background: #FFFFFF;
+            border: 1px solid #E6ECF8;
+            border-radius: 14px;
+            padding: 12px;
+            height: 100%;
+        }
+
+        .poc2-sim-side .poc2-sim-legend {
+            margin-top: 0;
+        }
+
+        .poc2-sim-side .poc2-sim-note {
+            margin-top: 12px;
+        }
+
         .poc2-sim-leg-row {
             display: flex;
             justify-content: space-between;
@@ -1161,9 +1177,10 @@ def _render_asset_donut(sri: int):
 
 
 def _projection_rates_from_sri(sri: int) -> tuple[float, float, float]:
-    expected = 0.018 + (sri - 1) * 0.007
-    favorable = expected + 0.02
-    unfavorable = max(-0.012, expected - (0.02 + (sri - 1) * 0.004))
+    expected = 0.015 + (sri - 1) * 0.006
+    spread = 0.018 + (sri - 1) * 0.003
+    favorable = expected + spread
+    unfavorable = max(-0.025, expected - spread)
     return favorable, expected, unfavorable
 
 
@@ -1228,63 +1245,71 @@ def _render_projection_chart(a: dict, sri: int):
     cumulative = data["cumulative"]
 
     years = [int(y) for y in labels]
-    def _rng_text(series: list[float], idx: int) -> str:
-        if idx == 0:
-            return _fmt_k_eur(series[idx])
-        lo = min(series[idx - 1], series[idx])
-        hi = max(series[idx - 1], series[idx])
-        return f"{_fmt_k_eur(lo)} - {_fmt_k_eur(hi)}"
+    band_rows = []
+    last_idx = max(1, len(years) - 1)
+    for i, year in enumerate(years):
+        t = i / last_idx
 
-    def _make_band(series: list[float], scenario: str) -> pd.DataFrame:
-        lows = [series[0]]
-        highs = [series[0]]
-        for i in range(1, len(series)):
-            lows.append(min(series[i - 1], series[i]))
-            highs.append(max(series[i - 1], series[i]))
-        return pd.DataFrame({"year": years, "scenario": scenario, "low": lows, "high": highs})
+        u = unfavorable[i]
+        e = expected[i]
+        f = favorable[i]
 
-    bands_df = pd.concat(
-        [
-            _make_band(unfavorable, "Defavorable"),
-            _make_band(expected, "Attendu"),
-            _make_band(favorable, "Favorable"),
-        ],
-        ignore_index=True,
-    )
+        def_width = 0.015 + 0.050 * t
+        att_width = 0.020 + 0.055 * t
+        fav_width = 0.025 + 0.060 * t
 
-    scen_df = pd.DataFrame(
-        {
-            "year": years * 3,
-            "scenario": ["Favorable"] * len(years)
-            + ["Attendu"] * len(years)
-            + ["Defavorable"] * len(years),
-            "value": favorable + expected + unfavorable,
-        }
-    )
+        def_low = max(0.0, u * (1 - def_width))
+        def_high_raw = u * (1 + def_width * 0.45)
+
+        att_low_raw = max(0.0, e * (1 - att_width))
+        att_high_raw = e * (1 + att_width)
+
+        fav_low_raw = max(0.0, f * (1 - fav_width * 0.45))
+        fav_high = f * (1 + fav_width)
+
+        # Glue boundaries so ranges cannot overlap:
+        # max(defavorable) == min(attendu) and max(attendu) == min(favorable).
+        boundary_def_att = max(def_high_raw, att_low_raw)
+        boundary_att_fav = max(att_high_raw, fav_low_raw, boundary_def_att)
+
+        def_high = max(def_low, boundary_def_att)
+        att_low = def_high
+        att_high = max(att_low, boundary_att_fav)
+        fav_low = att_high
+        fav_high = max(fav_low, fav_high)
+
+        band_rows.extend(
+            [
+                {"year": year, "scenario": "Defavorable", "low": def_low, "high": def_high},
+                {"year": year, "scenario": "Attendu", "low": att_low, "high": att_high},
+                {"year": year, "scenario": "Favorable", "low": fav_low, "high": fav_high},
+            ]
+        )
+
+    bands_df = pd.DataFrame(band_rows)
+
+    scenario_bounds = {
+        (int(row["year"]), row["scenario"]): (row["low"], row["high"])
+        for row in bands_df.to_dict("records")
+    }
+
+    def _range_text(year: int, scenario: str) -> str:
+        bounds = scenario_bounds.get((year, scenario))
+        if bounds is None:
+            return "-"
+        low, high = bounds
+        return f"{_fmt_k_eur(low)} - {_fmt_k_eur(high)}"
 
     cum_df = pd.DataFrame({"year": years, "value": cumulative})
 
-    y_max = max(favorable + expected + unfavorable + cumulative) * 1.08
+    y_max = max(float(bands_df["high"].max()), max(cumulative)) * 1.08
     y_axis = alt.Axis(title=None, format="~s", orient="right")
     x_axis = alt.Axis(title=None, labelAngle=0)
 
-    areas = alt.Chart(bands_df).mark_area(opacity=0.24).encode(
+    areas = alt.Chart(bands_df).mark_area(opacity=0.34).encode(
         x=alt.X("year:O", axis=x_axis),
         y=alt.Y("low:Q", axis=y_axis),
         y2="high:Q",
-        color=alt.Color(
-            "scenario:N",
-            scale=alt.Scale(
-                domain=["Favorable", "Attendu", "Defavorable"],
-                range=["#03AFA7", "#102065", "#D9016D"],
-            ),
-            legend=None,
-        ),
-    )
-
-    lines = alt.Chart(scen_df).mark_line(strokeWidth=2).encode(
-        x=alt.X("year:O", axis=x_axis),
-        y=alt.Y("value:Q", axis=y_axis),
         color=alt.Color(
             "scenario:N",
             scale=alt.Scale(
@@ -1307,9 +1332,9 @@ def _render_projection_chart(a: dict, sri: int):
             "year": years,
             "low": [0.0 for _ in years],
             "high": [y_max for _ in years],
-            "tooltip_favorable": [_rng_text(favorable, i) for i in range(len(years))],
-            "tooltip_attendu": [_rng_text(expected, i) for i in range(len(years))],
-            "tooltip_defavorable": [_rng_text(unfavorable, i) for i in range(len(years))],
+            "tooltip_favorable": [_range_text(year, "Favorable") for year in years],
+            "tooltip_attendu": [_range_text(year, "Attendu") for year in years],
+            "tooltip_defavorable": [_range_text(year, "Defavorable") for year in years],
             "tooltip_cumules": [_fmt_k_eur(cumulative[i]) for i in range(len(years))],
             "anchor": expected,
         }
@@ -1334,7 +1359,7 @@ def _render_projection_chart(a: dict, sri: int):
     ).transform_filter(nearest)
 
     chart = (
-        (areas + lines + cumulative_line + selectors + hover_rule)
+        (areas + cumulative_line + selectors + hover_rule)
         .properties(height=300)
         .configure_view(stroke=None)
         .configure_axis(gridColor="#EEF2FA", domainColor="#8FA3C7", tickColor="#9FB0CF")
@@ -1346,22 +1371,27 @@ def _render_projection_chart(a: dict, sri: int):
             '<div class="poc2-sim-sub">Projection estimee selon votre horizon, vos versements et votre profil SRI. Survolez le graphe pour voir les details par annee.</div>',
             unsafe_allow_html=True,
         )
-        st.markdown('<div class="poc2-sim-chart-wrap">', unsafe_allow_html=True)
-        st.altair_chart(chart, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
-        st.markdown(
-            '<div class="poc2-sim-legend">'
-            '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#03AFA7;"></span><span>Favorable</span></div></div>'
-            '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#102065;"></span><span>Attendu</span></div></div>'
-            '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#D9016D;"></span><span>Defavorable</span></div></div>'
-            '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #111111;"></span><span>Vos versements</span></div></div>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div class="poc2-sim-note">Les supports d\'investissement presentent un risque de perte en capital. Les performances passees ne prejudgent pas des performances futures.</div>',
-            unsafe_allow_html=True,
-        )
+        chart_col, side_col = st.columns([3.8, 1.5], gap="medium")
+
+        with chart_col:
+            with st.container(border=True):
+                st.altair_chart(chart, width="stretch")
+
+        with side_col:
+            with st.container(border=True):
+                st.markdown(
+                    '<div class="poc2-sim-legend">'
+                    '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#03AFA7;"></span><span>Favorable</span></div></div>'
+                    '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#102065;"></span><span>Attendu</span></div></div>'
+                    '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span class="poc2-donut-dot" style="background:#D9016D;"></span><span>Defavorable</span></div></div>'
+                    '<div class="poc2-sim-leg-row"><div class="poc2-sim-leg-left"><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #111111;"></span><span>Vos versements</span></div></div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    '<div class="poc2-sim-note">Les supports d\'investissement presentent un risque de perte en capital. Les performances passees ne prejudgent pas des performances futures.</div>',
+                    unsafe_allow_html=True,
+                )
 
 
 def _render_recommendation_dashboard(a: dict):

@@ -5,6 +5,7 @@ import streamlit as st
 from views.poc1_geo import show_poc1
 from views.poc2_underwriting import show_poc2
 from views.poc3_advisor import show_poc3
+from views.poc4_mon_espace import show_poc4
 
 st.set_page_config(
     page_title="CNP Assurances - Patrimoine & Épargne",
@@ -16,6 +17,7 @@ PAGE_LABELS = {
     "poc1": "POC 1",
     "poc2": "POC 2",
     "poc3": "POC 3",
+    "poc4": "POC 4",
 }
 
 
@@ -39,7 +41,7 @@ def _normalize_page(value):
     if lowered in PAGE_LABELS:
         return PAGE_LABELS[lowered]
 
-    if lowered in {"poc 1", "poc 2", "poc 3"}:
+    if lowered in {"poc 1", "poc 2", "poc 3", "poc 4"}:
         return lowered.upper()
 
     if page in PAGE_LABELS.values():
@@ -300,6 +302,7 @@ st.markdown(
 p1_cls = "active" if st.session_state.current_page == "POC 1" else "inactive"
 p2_cls = "active" if st.session_state.current_page == "POC 2" else "inactive"
 p3_cls = "active" if st.session_state.current_page == "POC 3" else "inactive"
+p4_cls = "active" if st.session_state.current_page == "POC 4" else "inactive"
 
 st.markdown(
     f"""
@@ -307,6 +310,7 @@ st.markdown(
         <a href="?page=poc1" target="_self" class="nav-item {p1_cls}">Vitrine & Offres (POC 1)</a>
         <a href="?page=poc2" target="_self" class="nav-item {p2_cls}">Souscription Dynamique (POC 2)</a>
         <a href="?page=poc3" target="_self" class="nav-item {p3_cls}">Conseiller IA & Alertes (POC 3)</a>
+        <a href="?page=poc4" target="_self" class="nav-item {p4_cls}">Mon espace (POC 4)</a>
     </div>
 """,
     unsafe_allow_html=True,
@@ -319,3 +323,5 @@ elif st.session_state.current_page == "POC 2":
     show_poc2()
 elif st.session_state.current_page == "POC 3":
     show_poc3()
+elif st.session_state.current_page == "POC 4":
+    show_poc4()

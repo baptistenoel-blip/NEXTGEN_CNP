@@ -4,8 +4,8 @@ import streamlit as st
 # Import des vues modulaires
 from views.poc1_geo import show_poc1
 from views.poc2_underwriting import show_poc2
-from views.poc3_advisor import show_poc3
-from views.poc4_mon_espace import show_poc4
+from views.poc3 import show_poc3
+from views.bot_diagnostic import show_bot_diagnostic
 
 st.set_page_config(
     page_title="CNP Assurances - Patrimoine & Épargne",
@@ -17,7 +17,7 @@ PAGE_LABELS = {
     "poc1": "POC 1",
     "poc2": "POC 2",
     "poc3": "POC 3",
-    "poc4": "POC 4",
+    "bot_diagnostic": "BOT DIAGNOSTIC",
 }
 
 
@@ -41,8 +41,11 @@ def _normalize_page(value):
     if lowered in PAGE_LABELS:
         return PAGE_LABELS[lowered]
 
-    if lowered in {"poc 1", "poc 2", "poc 3", "poc 4"}:
+    if lowered in {"poc 1", "poc 2", "poc 3"}:
         return lowered.upper()
+
+    if lowered == "bot diagnostic":
+        return "BOT DIAGNOSTIC"
 
     if page in PAGE_LABELS.values():
         return page
@@ -301,16 +304,16 @@ st.markdown(
 # --- ONGLETS DE NAVIGATION CENTRÉS (BLEU) ---
 p1_cls = "active" if st.session_state.current_page == "POC 1" else "inactive"
 p2_cls = "active" if st.session_state.current_page == "POC 2" else "inactive"
-p3_cls = "active" if st.session_state.current_page == "POC 3" else "inactive"
-p4_cls = "active" if st.session_state.current_page == "POC 4" else "inactive"
+p3_cls = "active" if st.session_state.current_page in {"POC 3", "BOT DIAGNOSTIC"} else "inactive"
+bot_cls = "active" if st.session_state.current_page == "BOT DIAGNOSTIC" else "inactive"
 
 st.markdown(
     f"""
     <div class="nav-container">
         <a href="?page=poc1" target="_self" class="nav-item {p1_cls}">Vitrine & Offres (POC 1)</a>
         <a href="?page=poc2" target="_self" class="nav-item {p2_cls}">Souscription Dynamique (POC 2)</a>
-        <a href="?page=poc3" target="_self" class="nav-item {p3_cls}">Conseiller IA & Alertes (POC 3)</a>
-        <a href="?page=poc4" target="_self" class="nav-item {p4_cls}">Mon espace (POC 4)</a>
+        <a href="?page=poc3" target="_self" class="nav-item {p3_cls}">Mon espace (POC 3)</a>
+        <a href="?page=bot_diagnostic" target="_self" class="nav-item {bot_cls}">Diagnostic copilote</a>
     </div>
 """,
     unsafe_allow_html=True,
@@ -323,5 +326,5 @@ elif st.session_state.current_page == "POC 2":
     show_poc2()
 elif st.session_state.current_page == "POC 3":
     show_poc3()
-elif st.session_state.current_page == "POC 4":
-    show_poc4()
+elif st.session_state.current_page == "BOT DIAGNOSTIC":
+    show_bot_diagnostic()
